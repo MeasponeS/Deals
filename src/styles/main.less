@@ -1,0 +1,193 @@
+/* ---
+* 全局样式表
+--- */
+@import url('https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&display=swap');
+@import "./variables.less";
+
+body {
+    font-family: @font-main;
+    background-color: var(--el-bg-color-page);
+    color: var(--el-text-color-primary);
+
+    padding: 1vw;
+    height: 98vh;
+    overflow: hidden;
+    transition: background-color @transition-med, color @transition-med;
+    display: flex;
+    flex-direction: column;
+}
+
+html.dark {
+    /* 暗色模式下的全局微调 */
+}
+
+body * {
+    margin: 0;
+}
+#app {
+    height: 100%;
+}
+
+/* --- 应用布局 --- */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 25px; /* 减少垂直 padding 来缩短顶栏高度 */
+    background: var(--bg-card);
+    border-radius: @border-radius-lg;
+    box-shadow: @shadow-main;
+    margin-bottom: 1.5vw;
+    flex-shrink: 0;
+}
+
+.app-title {
+    color: var(--primary);
+    font-size: 1.5em;
+    margin: 0;
+}
+
+/* --- Dashboard 布局修复 --- */
+.dashboard-container {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5vw;
+    flex-grow: 1;
+    overflow: hidden; 
+}
+
+/* 强制设置高度，这是解决问题的关键 */
+.dashboard-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5vw;
+    height: calc(100vh - 100px); /* 100px 是顶栏高度 + 上下边距的一个估算值 */
+    min-height: 0;
+}
+
+.dashboard-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5vw;
+    min-height: 0;
+}
+
+.dashboard-card {
+    background-color: var(--bg-card);
+    border-radius: @border-radius-lg;
+    box-shadow: @shadow-main;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 卡片头部 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+    h3 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.4em;
+        font-weight: bold;
+    }
+    .icon {
+        color: var(--primary);
+    }
+}
+
+.card-search-input.el-input .el-input__wrapper {
+    border-radius: @border-radius-md !important;
+}
+
+/* --- 待办模块修复 --- */
+.todo-section { 
+    flex: 3; /* 分配更多空间 */
+    min-height: 0; /* 关键修复：允许模块收缩 */
+    display: flex;
+    flex-direction: column;
+}
+
+.todo-options {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap; /* 禁止换行 */
+}
+
+/* 日期、优先级、提醒选择器宽度修复 */
+.todo-options .el-date-editor {
+    width: 140px !important; /* 调整宽度 */
+}
+.todo-options .priority-select {
+    width: 100px !important;
+}
+.todo-options .reminder-select {
+    width: 120px !important;
+}
+
+
+/* --- 灵感胶囊模块修复 --- */
+.memo-section { 
+    flex: 2; /* 分配较少空间 */
+    min-height: 0; /* 关键修复：允许模块收缩 */
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.fab {
+    position: absolute;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+}
+
+/* --- 日历模块修复 --- */
+.calendar-day {
+    .calendar-day-date {
+        z-index: 1;
+        position: relative;
+    }
+    &.selected {
+        color: white;
+    }
+    &.has-tasks::after {
+        background-color: var(--accent);
+    }
+}
+.el-button.is-circle {
+    width: 32px;
+    height: 32px;
+}
+.danger-item {
+    color: var(--el-color-danger) !important;
+    &:hover {
+        background-color: var(--danger-hover) !important;
+    }
+}
+
+/* 确保内部列表可独立滚动 */
+.task-list-container, .memo-list {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+/* --- 全局滚动条美化 --- */
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
