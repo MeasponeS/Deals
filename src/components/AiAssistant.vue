@@ -3,7 +3,7 @@
         <div class="card-header">
             <h3><span class="icon">🤖</span>智能助手</h3>
             <el-button id="ai-new-chat-btn" @click="newChat" circle>
-                <el-icon><Refresh /></el-icon>
+                <el-icon><ChatDotRound /></el-icon>
             </el-button>
         </div>
         <div ref="chatWindow" class="chat-window">
@@ -54,10 +54,10 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Promotion, Refresh, VideoPause } from '@element-plus/icons-vue';
+import { Promotion, Refresh, VideoPause, ChatDotRound } from '@element-plus/icons-vue';
 import { marked } from 'marked';
 import { useTodoStore } from '@/store/todo';
-import { aiService, type Message } from '@/utils/aiService';
+import { aiService, type Message, type Tool } from '@/utils/aiService';
 
 // --- Interfaces and Type Guards for Tool Calling ---
 interface ToolCall {
@@ -82,7 +82,7 @@ function isToolCallDelta(chunk: any): chunk is { tool_calls: ToolCallDelta[] } {
 }
 
 // --- Component State ---
-const tools = [
+const tools: Tool[] = [
   {
     type: 'function',
     function: {
@@ -109,7 +109,7 @@ const tools = [
       },
     },
   },
-];
+] as const; // Use 'as const' to infer the narrowest types
 const todoStore = useTodoStore();
 const userInput = ref('');
 const chatWindow = ref<HTMLDivElement | null>(null);
