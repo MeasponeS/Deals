@@ -7,9 +7,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useTodoStore } from '@/store/todo';
-import { useThemeStore } from '@/store/theme';
+import { useThemeStore, availableThemes } from '@/store/theme';
 import { ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 
@@ -35,9 +35,23 @@ const scheduleWeeklyClear = () => {
   }, delay);
 };
 
+const applyThemeStyles = (themeClass: string) => {
+  const theme = availableThemes.find(t => t.class === themeClass);
+  if (!theme) return;
+
+  const themeColors = theme.colors;
+
+  for (const [key, value] of Object.entries(themeColors)) {
+    document.documentElement.style.setProperty(key, value);
+  }
+};
+
+watch(() => themeStore.currentTheme, (newThemeClass) => {
+  applyThemeStyles(newThemeClass);
+}, { immediate: true });
+
+
 onMounted(() => {
-  const themeStore = useThemeStore();
-  themeStore.initTheme();
   scheduleWeeklyClear();
 });
 </script>

@@ -9,16 +9,18 @@ const requestPermission = async () => {
     if (Notification.permission === 'granted') {
         return 'granted';
     }
-    if (Notification.permission !== 'denied') {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            ElMessage.success("通知权限已获取！");
-        } else {
-            ElMessage.error("你拒绝了通知权限");
-        }
-        return permission;
+    if (Notification.permission === 'denied') {
+        ElMessage.error("通知权限已被禁用，请在浏览器设置中手动开启。");
+        return 'denied';
     }
-    return 'denied';
+    // 当权限为 'default' 时
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+        ElMessage.success("通知权限已获取！");
+    } else {
+        ElMessage.warning("你拒绝了本次通知请求。");
+    }
+    return permission;
 };
 
 const checkReminders = async () => {

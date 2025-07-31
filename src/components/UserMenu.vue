@@ -7,11 +7,11 @@
       </div>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="history">
-            <span class="icon">📜</span> 查看历史
-          </el-dropdown-item>
           <el-dropdown-item command="settings">
-            <span class="icon">🎨</span> 主题设置
+            <span class="icon">⚙️</span> 设置中心
+          </el-dropdown-item>
+          <el-dropdown-item command="test-notification">
+            <span class="icon">🔔</span> 测试提醒
           </el-dropdown-item>
           <el-dropdown-item command="logout" divided>
             <span class="icon">🚪</span> 退出登录
@@ -19,8 +19,7 @@
         </el-dropdown-menu>
       </template>
     </el-dropdown>
-    <SettingsModal v-model="showTheme" />
-    <HistoryModal v-model="showHistory" />
+    <SettingsModal v-model="showSettings" />
   </div>
 </template>
 
@@ -29,22 +28,21 @@ import { useUserStore } from '@/store/user';
 import { useRouter } from 'vue-router';
 import { ref } from 'vue';
 import SettingsModal from './SettingsModal.vue';
-import HistoryModal from './HistoryModal.vue';
+import { useNotifications } from '@/utils/notifications';
 
 const userStore = useUserStore();
 const router = useRouter();
-const showTheme = ref(false);
-const showHistory = ref(false);
+const showSettings = ref(false);
+const notifications = useNotifications();
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
     userStore.logout();
-    // 使用 window.location.reload() 来确保所有状态都被清除
     window.location.reload();
   } else if (command === 'settings') {
-    showTheme.value = true;
-  } else if (command === 'history') {
-    showHistory.value = true;
+    showSettings.value = true;
+  } else if (command === 'test-notification') {
+    notifications.testNotification();
   }
 }
 </script>

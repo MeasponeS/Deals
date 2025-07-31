@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-card todo-section">
     <div class="card-header">
-      <h3><span class="icon">��</span>我的待办清单</h3>
+      <h3><span class="icon">📝</span>我的待办清单</h3>
       <div class="header-actions">
         <el-input 
           :model-value="todoStore.searchTerm"

@@ -1,93 +1,199 @@
 <template>
-  <el-dialog v-model="visible" title="设置" width="400px" @close="$emit('close')">
-    <div class="settings-content">
-      <h3><span class="icon">🎨</span> 主题设置</h3>
-      <p>选择一个你喜欢的风格吧！</p>
-      <div class="theme-selector">
-      <div
-        v-for="theme in themeList"
-        :key="theme.name"
-        class="theme-option"
-        :class="{ active: themeStore.currentTheme === theme.name }"
-        @click="setTheme(theme.name)"
-      >
-        <span>{{ theme.label }}</span>
-      </div>
-      </div>
-      <el-divider />
-      <h3><span class="icon">🔔</span> 通知测试</h3>
-       <el-button @click="notifications.testNotification" class="test-btn">
-        测试桌面提醒
-      </el-button>
-    </div>
+  <el-dialog
+    v-model="isDialogVisible"
+    title="设置中心"
+    width="680px"
+    @close="emit('update:modelValue', false)"
+    class="settings-dialog"
+  >
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="主题选择" name="theme">
+        <div class="theme-selector">
+          <div 
+            v-for="theme in availableThemes" 
+            :key="theme.id"
+            class="theme-option"
+            :class="{ active: themeStore.currentTheme === theme.class }"
+            @click="handleThemeSelect(theme.id)"
+          >
+            <div class="theme-preview" :style="{ backgroundColor: theme.colors['--el-bg-color-page'] }">
+              <div class="preview-header" :style="{ backgroundColor: theme.colors['--el-bg-color-overlay'] }">
+                <div class="preview-dot" :style="{ backgroundColor: theme.colors['--el-color-primary'] }"></div>
+              </div>
+              <div class="preview-body">
+                <div class="preview-line" :style="{ backgroundColor: theme.colors['--accent'] }"></div>
+                <div class="preview-line short" :style="{ backgroundColor: theme.colors['--el-text-color-secondary'] }"></div>
+              </div>
+            </div>
+            <div class="theme-info">
+              <span class="theme-icon">{{ theme.icon }}</span>
+              <span class="theme-name">{{ theme.name }}</span>
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+      <el-tab-pane label="API 设置" name="api">
+        <div class="api-settings">
+          <h4>OpenAI API Key</h4>
+          <el-input
+            v-model="apiKeyInput"
+            type="password"
+            show-password
+            placeholder="请输入你的 OpenAI API Key"
+          />
+          <h4>Organization ID (可选)</h4>
+          <el-input
+            v-model="organizationIdInput"
+            placeholder="请输入你的 Organization ID"
+          />
+          <el-button type="primary" @click="saveApiSettings">保存设置</el-button>
+          <p class="settings-caption">
+            你的 API Key 和 Organization ID 将被安全地存储在你的浏览器本地存储中，不会被上传到任何服务器。
+          </p>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { useThemeStore, themeList } from '@/store/theme'
-import { useNotifications } from '@/utils/notifications';
-import { ref, watch } from 'vue'
+import { computed, ref } from 'vue';
+import { useThemeStore, availableThemes } from '@/store/theme';
+import { ElMessage } from 'element-plus';
+import { aiService } from '@/utils/aiService';
 
-const props = defineProps<{ modelValue: boolean }>()
-const emit = defineEmits(['update:modelValue', 'close'])
-const visible = ref(props.modelValue)
-const themeStore = useThemeStore()
-const notifications = useNotifications();
+const props = defineProps<{ modelValue: boolean }>();
+const emit = defineEmits(['update:modelValue']);
 
+const themeStore = useThemeStore();
+const activeTab = ref('theme');
+const apiKeyInput = ref(aiService.getApiKey() || '');
+const organizationIdInput = ref(aiService.getOrganizationId() || '');
 
-watch(() => props.modelValue, v => visible.value = v)
-watch(visible, v => emit('update:modelValue', v))
+const isDialogVisible = computed({
+  get: () => props.modelValue,
+  set: (val) => emit('update:modelValue', val),
+});
 
-function setTheme(theme: string) {
-  themeStore.setTheme(theme)
-}
+const handleThemeSelect = (themeId: string) => {
+  themeStore.setTheme(themeId);
+  ElMessage.success({
+    message: '主题切换成功！',
+    duration: 1500,
+  });
+  // No need to close the dialog anymore, user might want to change other settings.
+};
+
+const saveApiSettings = () => {
+  const apiKey = apiKeyInput.value.trim();
+  const orgId = organizationIdInput.value.trim();
+
+  if (apiKey) {
+    aiService.setApiKey(apiKey);
+    if (orgId) {
+      aiService.setOrganizationId(orgId);
+    }
+    ElMessage.success('API 设置已保存！');
+    isDialogVisible.value = false;
+  } else {
+    ElMessage.warning('请输入有效的 API Key。');
+  }
+};
 </script>
 
 <style lang="less" scoped>
-.settings-content h3 {
-  margin: 20px 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.theme-selector {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-top: 10px;
-}
-.theme-option {
-  padding: 15px;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-  text-align: center;
-  font-weight: 500;
-  font-size: 1.1em;
-  transition: all 0.2s;
-  background: var(--bg-input);
-}
-.theme-option.active, .theme-option:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--bg-card);
-}
-.theme-option span {
-  font-size: 1.5em;
-  display: block;
-  margin-bottom: 8px;
+// --- Common Styles ---
+.settings-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
 }
 
-.test-btn {
-    width: 100%;
-    margin-top: 10px;
-    background-color: var(--accent);
-    color: var(--text-main);
-    border: none;
-    font-weight: 500;
-     &:hover {
-      opacity: 0.8;
-      background-color: color-mix(in srgb, var(--accent) 80%, black);
-    }
+// --- Theme Selector Styles ---
+.theme-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 25px;
+  padding: 20px;
 }
-</style> 
+.theme-option {
+  cursor: pointer;
+  border-radius: @border-radius-lg;
+  overflow: hidden;
+  border: 2px solid var(--el-border-color-light);
+  transition: all @transition-fast;
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: @shadow-main;
+    border-color: var(--el-color-primary);
+  }
+  &.active {
+    border-color: var(--el-color-primary);
+    box-shadow: @shadow-strong;
+  }
+}
+.theme-preview {
+  height: 120px;
+  padding: 12px;
+  border-bottom: 2px solid var(--el-border-color-light);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-header {
+  height: 25px;
+  border-radius: @border-radius-sm;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  box-shadow: @shadow-light;
+}
+.preview-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.preview-body {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.preview-line {
+  height: 10px;
+  border-radius: @border-radius-sm;
+  width: 80%;
+  &.short {
+    width: 50%;
+  }
+}
+.theme-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  background-color: var(--el-bg-color-overlay);
+}
+.theme-icon { font-size: 1.8em; }
+.theme-name { font-size: 1.1em; font-weight: bold; }
+
+// --- API Settings Styles ---
+.api-settings {
+  padding: 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  
+  h4 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+  }
+
+  .settings-caption {
+    font-size: 0.85em;
+    color: var(--el-text-color-secondary);
+    line-height: 1.5;
+  }
+}
+</style>
+  

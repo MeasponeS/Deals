@@ -1,22 +1,50 @@
 import { AI_CONFIG } from '@/config';
+import { marked } from 'marked';
+import { ElMessage } from 'element-plus';
 
 // 定义消息的类型接口
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
+export interface Tool {
+    type: 'function';
+    function: object;
+}
 
 // 定义AI服务类
 class AiService {
-  private apiKey: string;
-  private apiEndpoint: string;
+  private apiKey: string | null = null;
+  private organizationId: string | null = null;
+  private abortController: AbortController | null = null;
 
   constructor() {
-    this.apiKey = AI_CONFIG.API_KEY;
-    this.apiEndpoint = AI_CONFIG.API_ENDPOINT;
+    this.apiKey = localStorage.getItem('openai_api_key');
+    this.organizationId = localStorage.getItem('openai_organization_id');
+  }
 
-    if (!this.apiKey) {
-      console.error("API key is missing. Please check your config.ts file.");
+  public setApiKey(key: string) {
+    this.apiKey = key;
+    localStorage.setItem('openai_api_key', key);
+  }
+
+  public getApiKey(): string | null {
+    return this.apiKey;
+  }
+
+  public setOrganizationId(id: string) {
+    this.organizationId = id;
+    localStorage.setItem('openai_organization_id', id);
+  }
+
+  public getOrganizationId(): string | null {
+    return this.organizationId;
+  }
+
+  public stopStream() {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
     }
   }
 
@@ -26,106 +54,98 @@ class AiService {
    * @param onFinish 对话完成时调用的回调函数
    */
   async streamCompletion(
-    conversation: Message[],
-    tools: any[] | null,
-    onChunk: (chunk: string | object) => void,
+    messages: Message[],
+    tools: Tool[],
+    onChunk: (chunk: any) => void,
     onFinish: () => void
   ): Promise<void> {
     if (!this.apiKey) {
-      return Promise.reject("API key is not configured.");
+      ElMessage.error('请先在用户设置中输入您的 OpenAI API Key。');
+      throw new Error('API key not set.');
     }
 
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+
     try {
-      const response = await fetch(this.apiEndpoint, {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      };
+
+      if (this.organizationId) {
+        headers['OpenAI-Organization'] = this.organizationId;
+      }
+
+      const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
+        headers,
         body: JSON.stringify({
-          model: "Qwen/Qwen3-30B-A3B",
-          messages: conversation,
-          tools: tools,
-          tool_choice: "auto",
-          max_tokens: 1024, // Increased for potentially longer streaming responses
+          model: 'Qwen/Qwen3-30B-A3B',
+          messages,
+          tools,
+          tool_choice: 'auto',
+          stream: true,
+          max_tokens: 4096,
           temperature: 0.7,
-          top_p: 0.7,
-          stream: true, // 关键参数：开启流式响应
+          top_p: 0.9,
         }),
+        signal,
       });
 
       if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(`API request failed: ${errorBody.error?.message || response.statusText}`);
+        const errorData = await response.json();
+        ElMessage.error(`API 请求失败: ${errorData.error.message}`);
+        throw new Error(`API error: ${response.statusText}`);
       }
 
-      if (!response.body) {
-        throw new Error("Response body is null");
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get stream reader.');
       }
-      
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      
+
+      const decoder = new TextDecoder();
       let buffer = '';
-      let isFinished = false;
 
-      const finishOnce = () => {
-        if (!isFinished) {
-          isFinished = true;
-          onFinish();
-        }
-      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const processStream = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep the last, possibly incomplete line
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const jsonStr = line.substring(6);
-              if (jsonStr === '[DONE]') {
-                finishOnce();
-                return; // Exit the async function processing the stream.
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last, possibly incomplete line
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.substring(6);
+            if (jsonStr === '[DONE]') {
+              break;
+            }
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const delta = parsed.choices[0]?.delta;
+              if (delta?.content) {
+                onChunk(delta.content);
+              } else if (delta?.tool_calls) {
+                onChunk({ tool_calls: delta.tool_calls });
               }
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const choice = parsed.choices?.[0];
-                
-                if (choice?.delta?.tool_calls) {
-                  onChunk(choice.delta);
-                } else {
-                  const content = choice?.delta?.content;
-                  if (content) {
-                    onChunk(content);
-                  }
-                }
-
-                if (choice?.finish_reason === 'stop' || choice?.finish_reason === 'tool_calls') {
-                   finishOnce();
-                }
-              } catch (e) {
-                console.error('Error parsing stream JSON:', e, jsonStr);
-              }
+            } catch (e) {
+              console.error('Failed to parse stream chunk:', e);
             }
           }
         }
-      };
-      
-      await processStream();
-      finishOnce(); // Ensure finish is called if the stream ends without a [DONE] or finish_reason.
-
-    } catch (error) {
-      console.error("Error calling AI service:", error);
-      onFinish(); // Ensure onFinish is called even on error
-      throw error;
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Stream reading aborted.');
+      } else {
+        console.error('An error occurred during stream processing:', error);
+        ElMessage.error('与 AI 服务通信时发生错误。');
+      }
+    } finally {
+      onFinish();
+      this.abortController = null; // Reset controller
     }
   }
 }

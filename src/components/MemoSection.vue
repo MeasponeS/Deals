@@ -26,7 +26,9 @@
       <el-empty v-else description="这里空空如也~ 快来捕捉一闪而过的灵感吧！" />
     </div>
 
-    <el-button class="fab" type="primary" icon="Plus" circle @click="openMemoModal(null)" />
+    <el-button class="fab" type="primary" circle @click="openMemoModal(null)">
+      <el-icon :size="24"><Plus /></el-icon>
+    </el-button>
 
     <MemoModal v-model="isModalVisible" :memo="selectedMemo" @saved="isModalVisible = false" />
   </div>
@@ -37,6 +39,7 @@ import { ref, onMounted } from 'vue';
 import { useMemoStore } from '@/store/memo';
 import type { Memo } from '@/db';
 import MemoModal from './MemoModal.vue';
+import { Plus } from '@element-plus/icons-vue';
 
 const memoStore = useMemoStore();
 
@@ -95,33 +98,36 @@ onMounted(() => {
 }
 
 .memo-card {
-    background-color: color-mix(in srgb, var(--accent) 20%, var(--bg-card)); // 混合主题强调色和卡片背景色
+    background-color: color-mix(in srgb, var(--accent) 15%, transparent);
     border-radius: @border-radius-md;
     padding: 20px;
     cursor: pointer;
     transition: all @transition-fast;
-    border: 1px solid var(--el-border-color-lighter); // 使用更浅的边框色
+    border: 1px solid var(--el-border-color-lighter);
     display: flex;
     flex-direction: column;
     
     &:hover {
         transform: translateY(-4px);
-        box-shadow: @shadow-main; // 悬浮时使用主阴影，更突出
-        border-color: var(--primary);
+        box-shadow: @shadow-light;
+        border-color: var(--el-color-primary);
     }
 
     h3 {
-        font-size: 1.2em;
+        font-size: 1.1em;
         margin: 0 0 12px 0;
-        color: var(--el-text-color-primary); // 使用 Element Plus 的主文本颜色
+        color: var(--el-text-color-primary);
+        font-weight: 600;
     }
 
     p {
-        font-size: 1em;
-        color: var(--el-text-color-regular); // 使用 Element Plus 的常规文本颜色
+        font-size: 0.95em;
+        color: var(--el-text-color-regular);
         margin: 0 0 15px 0;
         flex-grow: 1;
         line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-all;
     }
 
     .memo-tags {
@@ -134,8 +140,17 @@ onMounted(() => {
     position: absolute;
     bottom: 25px;
     right: 25px;
-    width: 60px;
-    height: 60px;
-    font-size: 24px;
+    width: 56px;
+    height: 56px;
+    box-shadow: @shadow-strong;
+    transition: all @transition-fast;
+
+    &:hover {
+        transform: translateY(-3px) scale(1.05);
+        box-shadow: @shadow-main;
+    }
+     &:active {
+        transform: translateY(-1px) scale(1);
+    }
 }
 </style> 

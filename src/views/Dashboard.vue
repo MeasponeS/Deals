@@ -85,11 +85,10 @@ onUnmounted(() => {
   flex-grow: 2;
 }
 :deep(.ai-assistant) {
-  flex-grow: 2;
-  min-height: 380px;
+  flex-grow: 3;
 }
 :deep(.calendar-section) {
-  flex-grow: 1;
+  flex-grow: 2;
 }
 
 // Responsive adjustments for smaller screens

@@ -25,23 +25,27 @@
                 </div>
             </template>
         </div>
-        <div class="ai-quick-actions">
-            <el-button @click="handleQuickPrompt('添加一个新待办')">创建待办</el-button>
-            <el-button @click="handleQuickPrompt('今天有什么安排？')">今日安排</el-button>
-            <el-button @click="handleQuickPrompt('帮我写一首关于夏天的诗')">写首诗</el-button>
-        </div>
         <div class="chat-input-form">
             <el-input
                 v-model="userInput"
-                placeholder="和你的专属助手聊聊..."
+                placeholder="尝试说：提醒我明天下午三点开会"
                 type="textarea"
                 :rows="1"
                 autosize
                 resize="none"
                 @keydown.enter.prevent="handleSend"
+                :disabled="isLoading"
             />
-            <el-button @click="handleSend" :loading="isLoading" circle>
-                <el-icon><Promotion /></el-icon>
+            <el-button 
+              @click="isLoading ? handleStop() : handleSend()" 
+              circle 
+              type="primary"
+              class="send-stop-btn"
+            >
+                <el-icon :size="20">
+                  <VideoPause v-if="isLoading" />
+                  <Promotion v-else />
+                </el-icon>
             </el-button>
         </div>
     </div>
@@ -50,7 +54,7 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Promotion, Refresh } from '@element-plus/icons-vue';
+import { Promotion, Refresh, VideoPause } from '@element-plus/icons-vue';
 import { marked } from 'marked';
 import { useTodoStore } from '@/store/todo';
 import { aiService, type Message } from '@/utils/aiService';
@@ -212,9 +216,10 @@ const handleSend = async () => {
   }
 };
 
-const handleQuickPrompt = (prompt: string) => {
-  userInput.value = prompt;
-  handleSend();
+const handleStop = () => {
+  aiService.stopStream();
+  isLoading.value = false;
+  ElMessage.info('AI助手已停止。');
 };
 
 const newChat = () => {
@@ -284,7 +289,7 @@ onMounted(() => {
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 85%;
-  background: var(--el-color-info-light-8);
+  background: var(--el-fill-color-light);
   border-radius: 18px 18px 18px 4px;
 }
 
@@ -320,24 +325,15 @@ onMounted(() => {
 :deep(pre) {
     white-space: pre-wrap;
 }
-.ai-quick-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 15px;
-}
 .chat-input-form {
     flex-shrink: 0;
     display: flex;
     gap: 8px;
     align-items: flex-end;
 }
-#ai-send-btn {
-    width: 48px;
-    height: 48px;
-    flex-shrink: 0;
+.send-stop-btn {
+  transition: all 0.2s ease-in-out;
 }
-
 // Deep styles for rendered markdown content
 :deep(.message-content) {
   p {
