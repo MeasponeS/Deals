@@ -21,6 +21,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  server: {
+    proxy: {
+      '/dev': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dev/, '/api'),
+      },
+    },
+  },
   css: {
     preprocessorOptions: {
       less: {
@@ -31,4 +40,4 @@ export default defineConfig({
       },
     },
   },
-}) 
+})
