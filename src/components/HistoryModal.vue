@@ -28,17 +28,20 @@
 
 <script setup lang="ts">
 import { ref, watch, reactive, computed } from 'vue';
-import { db, type Todo } from '@/db';
+import { useTodoStore } from '@/store/todo';
+import type { Todo } from '@/utils/api';
 import TodoList from './TodoList.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits(['update:modelValue', 'close']);
 const visible = ref(props.modelValue);
 
-watch(() => props.modelValue, (val) => {
-  visible.value = val;
-  if (val) {
-    fetchHistory();
+watch(() => props.modelValue, async (isVisible) => {
+  if (isVisible) {
+    if (!todoStore.todos.length) {
+      await todoStore.fetchTodos();
+    }
+    allHistory.value = todoStore.doneTodos;
   }
 });
 watch(visible, val => emit('update:modelValue', val));

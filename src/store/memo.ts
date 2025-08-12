@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
-import { db, type Memo } from '@/db';
 import { ElMessage } from 'element-plus';
+import { getMemos, createMemo, updateMemo, deleteMemo, type Memo, type MemoRequest } from '@/utils/api';
 
 interface MemoState {
   memos: Memo[];
@@ -12,76 +12,60 @@ export const useMemoStore = defineStore('memo', {
     memos: [],
     searchTerm: '',
   }),
-
   getters: {
     filteredMemos(state): Memo[] {
-      const lowerSearchTerm = state.searchTerm.toLowerCase();
-      if (!lowerSearchTerm) {
+      if (!state.searchTerm) {
         return state.memos;
       }
       return state.memos.filter(memo =>
-        memo.title.toLowerCase().includes(lowerSearchTerm) ||
-        memo.content.toLowerCase().includes(lowerSearchTerm) ||
-        (memo.tags || []).some(tag => tag.toLowerCase().includes(lowerSearchTerm))
+        memo.title.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+        memo.content.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+        memo.tags.toLowerCase().includes(state.searchTerm.toLowerCase())
       );
-    },
+    }
   },
-
   actions: {
     async fetchMemos() {
-      this.memos = await db.memos.orderBy('createdAt').reverse().toArray();
+        try {
+            const response = await getMemos({ title: this.searchTerm });
+            this.memos = response.data;
+        } catch (error) {
+            console.error('Failed to fetch memos:', error);
+            ElMessage.error('获取备忘录失败');
+        }
     },
-
-    async saveMemo(memoData: Partial<Memo>) {
-      if (!memoData.content?.trim() && !memoData.title?.trim()) {
-        ElMessage.error('标题和内容至少填写一项');
-        return null;
-      }
-
-      const dataToSave = {
-        title: memoData.title || '无标题',
-        content: memoData.content || '',
-        tags: memoData.tags || [],
-      };
-
+    async saveMemo(memoData: Memo | MemoRequest) {
+      const isUpdate = 'id' in memoData && memoData.id;
       try {
-        if (memoData.id) {
-          // Update
-          await db.memos.update(memoData.id, dataToSave);
-          ElMessage.success('备忘已更新！');
+        if (isUpdate) {
+            const { id, ...data } = memoData as Memo;
+            const response = await updateMemo(id, data);
+            const index = this.memos.findIndex(m => m.id === id);
+            if (index !== -1) this.memos[index] = response.data;
         } else {
-          // Create
-          const newMemo = { ...dataToSave, createdAt: new Date().toISOString() };
-          await db.memos.add(newMemo);
-          ElMessage.success('备忘已保存！');
+            const response = await createMemo(memoData);
+            this.memos.unshift(response.data);
         }
         await this.fetchMemos();
-        return true;
+        ElMessage.success(isUpdate ? '备忘录已更新！' : '备忘录已创建！');
       } catch (error) {
-        console.error("Failed to save memo:", error);
-        ElMessage.error('保存失败');
-        return null;
+        console.error('Failed to save memo:', error);
+        ElMessage.error('保存备忘录失败');
       }
     },
-
     async deleteMemo(id: number) {
-       try {
-            await db.transaction('rw', db.memos, db.attachments, async () => {
-                await db.attachments.where({ parentId: id, parentType: 'memo' }).delete();
-                await db.memos.delete(id);
-            });
-            await this.fetchMemos();
-            ElMessage.success('备忘已删除。');
-            return true;
-        } catch (error) {
-            console.error("Failed to delete memo:", error);
-            ElMessage.error('删除失败');
-            return null;
-        }
+      try {
+        await deleteMemo(id);
+        this.memos = this.memos.filter(m => m.id !== id);
+        ElMessage.success('备忘录已删除！');
+      } catch (error) {
+        console.error('Failed to delete memo:', error);
+        ElMessage.error('删除备忘录失败');
+      }
     },
-
     setSearchTerm(term: string) {
       this.searchTerm = term;
-    },
-  },
+      this.fetchMemos();
+    }
+  }
 }); 

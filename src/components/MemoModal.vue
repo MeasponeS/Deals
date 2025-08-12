@@ -32,9 +32,9 @@
 <script setup lang="ts">
 import { ref, watch, computed, reactive } from 'vue';
 import type { PropType } from 'vue';
-import type { Memo } from '@/db';
+import type { Memo, MemoRequest } from '@/utils/api';
 import { useMemoStore } from '@/store/memo';
-import { ElMessageBox } from 'element-plus';
+import { ElMessageBox, ElMessage } from 'element-plus';
 
 const props = defineProps({
   modelValue: Boolean, // for v-model
@@ -64,26 +64,32 @@ watch(() => props.memo, (newMemo) => {
     form.id = newMemo.id;
     form.title = newMemo.title;
     form.content = newMemo.content;
-    tagsInput.value = (newMemo.tags || []).join(', ');
+    tagsInput.value = newMemo.tags || '';
   } else {
-    // resetForm();
+    resetForm();
   }
 }, { immediate: true });
 
 
 const handleSave = async () => {
-    const memoData: Partial<Memo> = {
-        title: form.title,
-        content: form.content,
-        tags: tagsInput.value.split(',').map(t => t.trim()).filter(Boolean),
+    if (!form.title && !form.content) {
+        ElMessage.error('标题和内容至少填写一项');
+        return;
+    }
+    
+    const data: MemoRequest | Memo = {
+        title: form.title || '无标题',
+        content: form.content || '',
+        tags: tagsInput.value,
     };
-    if (form.id) {
-        memoData.id = form.id;
+
+    if (isEditing.value && form.id) {
+        (data as Memo).id = form.id;
     }
-    const success = await memoStore.saveMemo(memoData);
-    if(success) {
-        emit('saved');
-    }
+
+    await memoStore.saveMemo(data);
+    emit('saved');
+    emit('update:modelValue', false);
 };
 
 const handleDelete = async () => {
@@ -98,16 +104,15 @@ const handleDelete = async () => {
                 type: 'warning',
             }
         );
-        const success = await memoStore.deleteMemo(form.id);
-        if (success) {
-            emit('saved');
-        }
+        await memoStore.deleteMemo(form.id);
+        emit('saved');
+        emit('update:modelValue', false);
     } catch {
         // User cancelled the action
     }
 };
 
-const resetForm = () => {
+function resetForm() {
     Object.assign(form, getInitialForm());
     tagsInput.value = '';
 }

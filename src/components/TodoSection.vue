@@ -16,7 +16,7 @@
       <el-input 
         ref="taskInputRef"
         type="textarea" 
-        v-model="newTodo.text" 
+        v-model="newTodo.title" 
         placeholder="例如：晚上8点和朋友一起跑步~" 
         :rows="1" 
         resize="none" 
@@ -24,19 +24,24 @@
       />
       <div class="todo-input-actions">
         <div class="todo-options">
-          <el-date-picker v-model="newTodo.dueDate" type="datetime" placeholder="选择时间" />
-          <el-select v-model="newTodo.priority" placeholder="优先级" class="priority-select">
-            <el-option label="🍭 普通" value="normal" />
-            <el-option label="⭐ 重要" value="important" />
-            <el-option label="🔥 紧急" value="urgent" />
+          <el-date-picker v-model="newTodo.dueAt" type="datetime" placeholder="选择时间" />
+          <el-select v-model="newTodo.urgency" placeholder="优先级" class="priority-select">
+            <el-option label="🍭 普通" value="LOW" />
+            <el-option label="⭐ 重要" value="MEDIUM" />
+            <el-option label="🔥 紧急" value="HIGH" />
           </el-select>
-          <el-select v-model="newTodo.reminder" placeholder="提醒" class="reminder-select">
-            <el-option label="🔔 不提醒" value="none" />
-            <el-option label="提前5分钟" value="5" />
-            <el-option label="提前15分钟" value="15" />
-            <el-option label="提前30分钟" value="30" />
-            <el-option label="提前1小时" value="60" />
-            <el-option label="提前1天" value="1440" />
+          <el-select
+            v-model="reminderOffsetMs"
+            placeholder="提醒提前"
+            :disabled="!newTodo.dueAt"
+            class="reminder-select"
+          >
+            <el-option label="不提醒" :value="NO_REMINDER" />
+            <el-option label="提前5分钟" :value="5 * 60 * 1000" />
+            <el-option label="提前15分钟" :value="15 * 60 * 1000" />
+            <el-option label="提前1小时" :value="60 * 60 * 1000" />
+            <el-option label="提前1天" :value="24 * 60 * 60 * 1000" />
+            <el-option v-if="isEditing" label="保留原提醒时间" :value="CUSTOM_PRESERVE" />
           </el-select>
         </div>
         <el-button type="primary" @click="handleSaveTodo">{{ isEditing ? '更 新' : '添 加' }}</el-button>
@@ -66,7 +71,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { useTodoStore } from '@/store/todo';
 import { useUiStore } from '@/store/ui';
 import TodoList from './TodoList.vue';
-import type { Todo } from '@/db';
+import type { Todo, TodoRequest } from '@/utils/api';
 import type { ElInput } from 'element-plus';
 
 const todoStore = useTodoStore();
@@ -74,11 +79,12 @@ const uiStore = useUiStore();
 
 const activeView = ref('pending');
 
-const getInitialNewTodo = (): Omit<Todo, 'id' | 'done' | 'createdAt' | 'completedAt'> => ({
-  text: '',
-  dueDate: null,
-  priority: 'normal',
-  reminder: 'none',
+const getInitialNewTodo = (): TodoRequest => ({
+  title: '',
+  content: '',
+  dueAt: null,
+  urgency: 'LOW',
+  reminderAt: null,
 });
 
 const newTodo = reactive(getInitialNewTodo());
@@ -86,19 +92,39 @@ const editingId = ref<number | null>(null);
 const isEditing = computed(() => editingId.value !== null);
 const taskInputRef = ref<InstanceType<typeof ElInput> | null>(null);
 
+// Reminder options
+const NO_REMINDER = -1;
+const CUSTOM_PRESERVE = -2;
+const reminderOffsetMs = ref<number>(NO_REMINDER);
+
 
 const handleSaveTodo = async () => {
+  // Compute final ISO strings
+  const dueAtIso = newTodo.dueAt ? new Date(newTodo.dueAt).toISOString() : null;
+  let reminderAtIso: string | null = null;
+  if (newTodo.dueAt) {
+    if (reminderOffsetMs.value === CUSTOM_PRESERVE && isEditing.value) {
+      reminderAtIso = newTodo.reminderAt ? new Date(newTodo.reminderAt).toISOString() : null;
+    } else if (reminderOffsetMs.value !== NO_REMINDER) {
+      const base = new Date(newTodo.dueAt).getTime();
+      reminderAtIso = new Date(base - reminderOffsetMs.value).toISOString();
+    }
+  }
+
   if (isEditing.value && editingId.value) {
     await todoStore.updateTodo(editingId.value, {
-        text: newTodo.text,
-        dueDate: newTodo.dueDate ? new Date(newTodo.dueDate).toISOString() : null,
-        priority: newTodo.priority,
-        reminder: newTodo.reminder
+        title: newTodo.title,
+        content: newTodo.content || newTodo.title,
+        dueAt: dueAtIso,
+        urgency: newTodo.urgency,
+        reminderAt: reminderAtIso,
     });
   } else {
     await todoStore.addTodo({
       ...newTodo,
-      dueDate: newTodo.dueDate ? new Date(newTodo.dueDate).toISOString() : null,
+      content: newTodo.content || newTodo.title,
+      dueAt: dueAtIso,
+      reminderAt: reminderAtIso,
     });
   }
   resetInput();
@@ -106,21 +132,35 @@ const handleSaveTodo = async () => {
 
 const openForEdit = (todo: Todo) => {
     editingId.value = todo.id!;
-    newTodo.text = todo.text;
-    newTodo.dueDate = todo.dueDate;
-    newTodo.priority = todo.priority;
-    newTodo.reminder = todo.reminder || 'none';
+    newTodo.title = todo.title;
+    newTodo.content = todo.content;
+    newTodo.dueAt = todo.dueAt;
+    newTodo.urgency = todo.urgency;
+    newTodo.reminderAt = todo.reminderAt;
+    // Infer reminder offset from existing values
+    if (todo.dueAt && todo.reminderAt) {
+      const diff = new Date(todo.dueAt).getTime() - new Date(todo.reminderAt).getTime();
+      const allowed = [5*60*1000, 15*60*1000, 60*60*1000, 24*60*60*1000];
+      if (allowed.includes(diff)) {
+        reminderOffsetMs.value = diff;
+      } else {
+        reminderOffsetMs.value = CUSTOM_PRESERVE; // preserve original reminder time
+      }
+    } else {
+      reminderOffsetMs.value = NO_REMINDER;
+    }
 };
 
 const resetInput = () => {
     Object.assign(newTodo, getInitialNewTodo());
     editingId.value = null;
     uiStore.clearTaskInput(); // Clear preset when we are done
+    reminderOffsetMs.value = NO_REMINDER;
 }
 
 watch(() => uiStore.taskInputPreset, (preset) => {
     if (preset) {
-        newTodo.text = preset;
+        newTodo.title = preset;
         taskInputRef.value?.focus();
     }
 });

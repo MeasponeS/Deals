@@ -1,17 +1,17 @@
 <template>
   <div class="task-list-container">
     <ul v-if="todos.length > 0" class="task-list">
-      <li v-for="todo in todos" :key="todo.id" class="task-list-item" :class="{ done: todo.done }">
+      <li v-for="todo in todos" :key="todo.id" class="task-list-item" :class="{ done: todo.status === 'COMPLETED' }">
         <div class="task-checkbox-container">
-          <el-checkbox :model-value="!!todo.done" @change="() => todoStore.toggleTodoStatus(todo.id!)" />
+          <el-checkbox :model-value="todo.status === 'COMPLETED'" @change="() => todoStore.toggleTodoStatus(todo.id!)" />
         </div>
         <div class="task-content">
-          <span class="task-text">{{ todo.text }}</span>
-          <span v-if="todo.dueDate" class="task-due-date">{{ formatDueDate(todo) }}</span>
+          <span class="task-text">{{ todo.title }}</span>
+          <span v-if="todo.dueAt" class="task-due-date">{{ formatDueDate(todo) }}</span>
         </div>
         <div class="task-actions">
-           <el-tag v-if="priorityMap[todo.priority]" :type="priorityMap[todo.priority].type" size="small" effect="dark" round>
-             {{ priorityMap[todo.priority].label }}
+           <el-tag v-if="priorityMap[todo.urgency]" :type="priorityMap[todo.urgency].type" size="small" effect="dark" round>
+             {{ priorityMap[todo.urgency].label }}
            </el-tag>
            <el-dropdown trigger="click">
             <el-button :icon="MoreFilled" circle plain />
@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import type { PropType } from 'vue';
-import type { Todo } from '@/db';
+import type { Todo } from '@/utils/api';
 import { useTodoStore } from '@/store/todo';
 import { ElMessageBox } from 'element-plus';
 import { MoreFilled, Edit, Delete } from '@element-plus/icons-vue';
@@ -56,17 +56,17 @@ defineEmits(['edit']);
 const todoStore = useTodoStore();
 
 const priorityMap = {
-  urgent: { label: '紧急', type: 'danger' },
-  important: { label: '重要', type: 'warning' },
-  normal: {label: '普通', type: 'info'}
+  HIGH: { label: '紧急', type: 'danger' },
+  MEDIUM: { label: '重要', type: 'warning' },
+  LOW: {label: '普通', type: 'info'}
 };
 
 const formatDueDate = (todo: Todo) => {
-  if (todo.done && todo.completedAt) {
-    return `完成于: ${new Date(todo.completedAt).toLocaleString()}`;
+  if (todo.status === 'COMPLETED') {
+    return `完成于: ${new Date(todo.createdAt).toLocaleString()}`;
   }
-  if(todo.dueDate) {
-    return `截止于: ${new Date(todo.dueDate).toLocaleString()}`;
+  if(todo.dueAt) {
+    return `截止于: ${new Date(todo.dueAt).toLocaleString()}`;
   }
   return '';
 };

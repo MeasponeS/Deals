@@ -9,11 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@types/marked": "^5.0.2",
+    "@vueup/vue-quill": "^1.2.0",
+    "axios": "^1.7.2",
     "canvas-confetti": "^1.9.3",
-    "dexie": "^4.0.1",
-    "element-plus": "^2.10.4",
-    "marked": "^16.1.1",
+    "element-plus": "^2.7.2",
     "pinia": "^2.1.7",
     "v-calendar": "^3.1.2",
     "vue": "^3.4.21",
@@ -25,6 +24,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "axios": "^1.11.0",
     "less": "^4.2.0",
+    "marked": "^16.1.2",
     "typescript": "^5.2.2",
     "unplugin-auto-import": "^0.17.5",
     "unplugin-vue-components": "^0.26.0",

@@ -2,19 +2,10 @@ import { defineStore } from 'pinia';
 import apiClient from '@/utils/api';
 import { ElMessage } from 'element-plus';
 
-// Helper function to sanitize the token, removing extra quotes or whitespace
-const sanitizeToken = (token: any): string | null => {
-  if (typeof token === 'string') {
-    return token.trim().replace(/^"|"$/g, '');
-  }
-  return null;
-};
-
 export const useUserStore = defineStore('user', {
-  // Sanitize token when loading from session storage as well
   state: () => ({
     username: sessionStorage.getItem('smartReminderUser') || null,
-    token: sanitizeToken(sessionStorage.getItem('smartReminderToken')),
+    token: sessionStorage.getItem('smartReminderToken'),
   }),
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -25,8 +16,8 @@ export const useUserStore = defineStore('user', {
       try {
         const response = await apiClient.post('/auth/signin', loginData);
         
-        if (response.data && response.data.success) {
-          const token = sanitizeToken(response.data.token);
+        if (response.data && response.data.token) {
+          const token = response.data.token;
           if (!token) {
             throw new Error("Invalid token received from server.");
           }

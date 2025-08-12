@@ -1,14 +1,12 @@
 import { defineStore } from 'pinia';
-import { db, type Todo } from '@/db';
 import { ElMessage, ElNotification } from 'element-plus';
 import confetti from 'canvas-confetti';
+import { getTodos, createTodo, updateTodo, deleteTodo, completeTodo, type Todo, type TodoRequest } from '@/utils/api';
 
 interface TodoState {
   todos: Todo[];
   searchTerm: string;
 }
-
-const priorityOrder = { urgent: 3, important: 2, normal: 1 };
 
 export const useTodoStore = defineStore('todo', {
   state: (): TodoState => ({
@@ -17,46 +15,43 @@ export const useTodoStore = defineStore('todo', {
   }),
 
   getters: {
-    // 5. 【进行中】列表我希望按照紧急程度-截止时间排序
-    pendingTodos(state) {
-      const now = new Date();
-      const filtered = state.todos.filter(todo =>
-        !todo.done &&
-        (!todo.dueDate || new Date(todo.dueDate) >= now) &&
-        todo.text.toLowerCase().includes(state.searchTerm.toLowerCase())
-      );
-      return filtered.sort((a, b) => {
-        const priorityDiff = (priorityOrder[b.priority] || 1) - (priorityOrder[a.priority] || 1);
-        if (priorityDiff !== 0) return priorityDiff;
-        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        return 0;
-      });
+    pendingTodos(state): Todo[] {
+      const lowerCaseSearchTerm = state.searchTerm.toLowerCase();
+      return state.todos
+        .filter(todo => todo.status === 'IN_PROGRESS' && todo.title.toLowerCase().includes(lowerCaseSearchTerm))
+        .sort((a, b) => {
+            const urgencyOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+            const urgencyA = urgencyOrder[a.urgency] || 0;
+            const urgencyB = urgencyOrder[b.urgency] || 0;
+            if (urgencyA !== urgencyB) {
+                return urgencyB - urgencyA;
+            }
+            if (a.dueAt && b.dueAt) {
+                return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+            }
+            return 0;
+        });
     },
 
-    // 4. 【已完成】列表我希望按照完成时间排序
-    doneTodos(state) {
-       return state.todos.filter(todo =>
-        todo.done && todo.text.toLowerCase().includes(state.searchTerm.toLowerCase())
-      ).sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
+    doneTodos(state): Todo[] {
+        const lowerCaseSearchTerm = state.searchTerm.toLowerCase();
+        return state.todos
+            .filter(todo => todo.status === 'COMPLETED' && todo.title.toLowerCase().includes(lowerCaseSearchTerm))
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     },
 
-    // 2. 我希望添加一个【已过期】的tab
-    overdueTodos(state) {
-      const now = new Date();
-      return state.todos.filter(todo =>
-        !todo.done &&
-        todo.dueDate &&
-        new Date(todo.dueDate) < now &&
-        todo.text.toLowerCase().includes(state.searchTerm.toLowerCase())
-      ).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+    overdueTodos(state): Todo[] {
+        const lowerCaseSearchTerm = state.searchTerm.toLowerCase();
+        return state.todos
+            .filter(todo => todo.status === 'EXPIRED' && todo.title.toLowerCase().includes(lowerCaseSearchTerm))
+            .sort((a, b) => new Date(a.dueAt!).getTime() - new Date(b.dueAt!).getTime());
     },
     
-    // 1. 已完成的待办不需要出现在日历中
     todosForDate(state) {
       return (date: Date) => {
         const d = date.toISOString().slice(0, 10);
         return state.todos.filter(todo => 
-          !todo.done && todo.dueDate && todo.dueDate.startsWith(d)
+            todo.status !== 'COMPLETED' && todo.dueAt && todo.dueAt.startsWith(d)
         );
       }
     }
@@ -64,27 +59,23 @@ export const useTodoStore = defineStore('todo', {
 
   actions: {
     async fetchTodos() {
-      this.todos = await db.todos.toArray();
+      try {
+        const response = await getTodos({ title: this.searchTerm });
+        this.todos = response.data;
+      } catch (error) {
+        console.error("Failed to fetch todos:", error);
+        ElMessage.error('获取待办事项失败');
+      }
     },
 
-    async addTodo(todoData: Omit<Todo, 'id' | 'done' | 'createdAt' | 'completedAt'>) {
-        if (!todoData.text.trim()) {
+    async addTodo(todoData: TodoRequest) {
+        if (!todoData.title.trim()) {
             ElMessage.error('内容不能为空');
             return;
         }
         try {
-            const newTodo: Omit<Todo, 'id'> = {
-                ...todoData,
-                done: 0,
-                createdAt: new Date().toISOString(),
-                completedAt: null,
-                reminderSent: false,
-            };
-            const newId = await db.todos.add(newTodo as Todo);
-            const newlyAddedTodo = await db.todos.get(newId);
-            if (newlyAddedTodo) {
-                this.todos.unshift(newlyAddedTodo); // 直接更新 state
-            }
+            const response = await createTodo(todoData);
+            this.todos.unshift(response.data);
             ElMessage.success('已添加待办！');
         } catch (error) {
             console.error("Failed to add todo:", error);
@@ -92,9 +83,13 @@ export const useTodoStore = defineStore('todo', {
         }
     },
 
-    async updateTodo(id: number, todoData: Partial<Todo>) {
+    async updateTodo(id: number, todoData: TodoRequest) {
         try {
-            await db.todos.update(id, todoData);
+            const response = await updateTodo(id, todoData);
+            const index = this.todos.findIndex(t => t.id === id);
+            if (index !== -1) {
+                this.todos[index] = response.data;
+            }
             await this.fetchTodos();
             ElMessage.success('待办已更新！');
         } catch (error) {
@@ -106,31 +101,27 @@ export const useTodoStore = defineStore('todo', {
     async toggleTodoStatus(id: number) {
         const todo = this.todos.find(t => t.id === id);
         if (todo) {
-            const isDone = !todo.done;
-            await db.todos.update(id, { 
-                done: isDone ? 1 : 0, 
-                completedAt: isDone ? new Date().toISOString() : null 
-            });
-            await this.fetchTodos();
-            if(isDone) {
+            try {
+                const response = await completeTodo(id);
+                const index = this.todos.findIndex(t => t.id === id);
+                if (index !== -1) {
+                    this.todos[index] = response.data;
+                }
                 ElMessage.success('太棒了！又完成一项！');
-                if (todo.priority === 'urgent' || todo.priority === 'important') {
+                if (response.data.urgency === 'HIGH' || response.data.urgency === 'MEDIUM') {
                     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 }
-            } else {
-                ElMessage.info('已移回待办。'); 
+            } catch (error) {
+                console.error("Failed to complete todo:", error);
+                ElMessage.error('操作失败');
             }
         }
     },
 
     async deleteTodo(id: number) {
-        // We can add a confirmation dialog in the component later
         try {
-            await db.transaction('rw', db.todos, db.attachments, async () => {
-                await db.attachments.where({ parentId: id, parentType: 'todo' }).delete();
-                await db.todos.delete(id);
-            });
-            await this.fetchTodos();
+            await deleteTodo(id);
+            this.todos = this.todos.filter(t => t.id !== id);
             ElMessage.success('已删除待办。');
         } catch (error) {
             console.error("Failed to delete todo:", error);
@@ -139,18 +130,21 @@ export const useTodoStore = defineStore('todo', {
     },
     
     async clearDoneTodos() {
+        // This functionality is not in the new API spec.
+        // For now, we'll just remove them from the local state.
+        const doneTodos = this.todos.filter(t => t.status === 'COMPLETED');
+        const deletePromises = doneTodos.map(t => this.deleteTodo(t.id));
         try {
-            await db.todos.where('done').equals(1).delete();
-            await this.fetchTodos();
+            await Promise.all(deletePromises);
             ElMessage.info('已清空所有已完成的待办事项。');
-        } catch (error) {
-            console.error("Failed to clear done todos:", error);
+        } catch(e) {
             ElMessage.error('清空失败');
         }
     },
 
     setSearchTerm(term: string) {
         this.searchTerm = term;
+        this.fetchTodos();
     }
   },
 }); 

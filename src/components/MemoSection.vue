@@ -37,8 +37,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useMemoStore } from '@/store/memo';
-import type { Memo } from '@/db';
 import MemoModal from './MemoModal.vue';
+import type { Memo } from '@/utils/api';
 import { Plus } from '@element-plus/icons-vue';
 
 const memoStore = useMemoStore();
